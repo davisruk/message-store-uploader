@@ -31,11 +31,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 @SpringBootApplication
 public class DemoApplication implements CommandLineRunner {
 
-	@Value ("${source.folder}")
-	private String sourceFolder;
+	@Value ("${transform.source.folder}")
+	private String transformSourceFolder;
 	
-	@Value ("${destination.folder}")
-	private String destinationFolder;
+	@Value ("${transform.destination.folder}")
+	private String transformDestinationFolder;
 	
 	@Value ("${web.service.url}")
 	private String webServiceUrl;
@@ -47,11 +47,11 @@ public class DemoApplication implements CommandLineRunner {
 	@Override
 	public void run(String... args) throws Exception {
 		String mode = getModeFromArgs(args);
-		
-		if("enqueue".equalsIgnoreCase(mode)) {
-			enqueueJsonMessages();
+		System.out.println("Using command mode " + mode);
+		if ("enqueueFiles".equalsIgnoreCase(mode)) {
+			enqueueMessagesFromFiles();
 		} else {
-			uploadFilesToWebService();
+			transformFiles();
 		}
 	}
 	
@@ -60,12 +60,12 @@ public class DemoApplication implements CommandLineRunner {
 				.filter(arg -> arg.startsWith("--mode="))
 				.map(arg -> arg.substring("--mode=".length()))
 				.findFirst()
-				.orElse("upload");
+				.orElse("transform");
 	}
 	
-	private void uploadFilesToWebService() {
-		File srcDir = new File(sourceFolder);
-		File destDir = new File(destinationFolder);
+	private void transformFiles() {
+		File srcDir = new File(transformSourceFolder);
+		File destDir = new File(transformDestinationFolder);
 		
 		if (!destDir.exists()) {
 			destDir.mkdirs();
@@ -112,19 +112,29 @@ public class DemoApplication implements CommandLineRunner {
 	@Value("${metadata.messageRenderTechnology}")
 	private String messageRenderTechnology;
 	
-	private void enqueueJsonMessages() {
-		File dir = new File(destinationFolder);
+	@Value("${metadata.formatURL}")
+	private String formatURL;
+	
+	@Value("${upload.source.folder}")
+	private String uploadSource;
+	
+	@Value("${upload.filename.suffix}")
+	private String uploadSuffix;
+	
+	private void enqueueMessagesFromFiles() {
+		File dir = new File(uploadSource);
 		ObjectMapper mapper = new ObjectMapper();
-		for (File file : Objects.requireNonNull(dir.listFiles((d, n) -> n.endsWith(".json")))) {
+		for (File file : Objects.requireNonNull(dir.listFiles((d, n) -> n.endsWith("." + uploadSuffix)))) {
 			try {
 				String content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
-				String baseName = file.getName().replaceFirst("\\.json$", "");
+				String baseName = file.getName().replaceFirst("\\." + uploadSuffix + "$", "");
 				ObjectNode wrapper = mapper.createObjectNode();
 				wrapper.put("sourceSystem", sourceSystem);
 				wrapper.put("destinationAddress", destinationAddress);
 				wrapper.put("messageId", "msg-" + baseName);
 				wrapper.put("correlationId", "corr-" + baseName);
 				wrapper.put("messageRenderTechnology", messageRenderTechnology);
+				wrapper.put("formatUrl", formatURL);
 				wrapper.put("payload", content);
 				
 				MessageProperties props = new MessageProperties();
